@@ -16,6 +16,13 @@ pub fn MinHeap(comptime T: type) type {
             };
         }
 
+        pub fn head(self: *const Self) ?usize {
+            if (self.data.items.len == 0) {
+                return null;
+            }
+            return self.data.items[0];
+        }
+
         pub fn deinit(self: *Self) void {
             self.data.deinit();
         }
@@ -26,6 +33,8 @@ pub fn MinHeap(comptime T: type) type {
         }
 
         pub fn delete(self: *Self) !?T {
+            // std.debug.print("\n", .{});
+            // std.debug.print("delete\n", .{});
             if (self.data.items.len == 0) {
                 return null;
             }
@@ -35,28 +44,47 @@ pub fn MinHeap(comptime T: type) type {
             }
 
             const out = self.data.items[0];
+            // std.debug.print("out: {d}\n", .{out});
             self.data.items[0] = self.data.pop();
-
+            // std.debug.print("self.data.items[0]: {d}\n", .{self.data.items[0]});
             try self.heapifyDown(0);
-
+            // std.debug.print("\n", .{});
             return out;
         }
 
         fn heapifyDown(self: *Self, index: usize) !void {
+            // std.debug.print("\n", .{});
+            // std.debug.print("heapifyDown\n", .{});
             if (index >= self.data.items.len) {
+                // std.debug.print("returning early\n", .{});
                 return;
             }
 
             const left_index = self.leftChildIndex(index);
             const right_index = self.rightChildIndex(index);
 
-            if (left_index >= self.data.items.len - 1) {
+            // std.debug.print("Left Index: {d}, left value: {d}\n", .{ left_index, self.data.items[left_index] });
+
+            if (left_index >= self.data.items.len) {
+                // std.debug.print("returning here\n", .{});
                 return;
             }
 
-            const left_value = self.data.items[left_index];
-            const right_value = self.data.items[right_index];
             const value = self.data.items[index];
+            const left_value = self.data.items[left_index];
+
+            if (left_index == self.data.items.len - 1) {
+                if (left_value < value) {
+                    // std.debug.print("Hi\n", .{});
+                    self.data.items[index] = left_value;
+                    self.data.items[left_index] = value;
+                }
+                return;
+            }
+            // std.debug.print("right Index: {d}, right value: {d}\n", .{ right_index, self.data.items[right_index] });
+
+            // const left_value = self.data.items[left_index];
+            const right_value = self.data.items[right_index];
 
             if (left_value > right_value and value > right_value) {
                 self.data.items[index] = right_value;
@@ -120,7 +148,7 @@ pub fn MinHeap(comptime T: type) type {
     };
 }
 
-fn check(heap: MinHeap(i32)) !void {
+fn check(heap: MinHeap(usize)) !void {
     var num_checked: usize = 0;
     if (heap.data.items.len == 0) {
         return;
@@ -137,8 +165,20 @@ fn check(heap: MinHeap(i32)) !void {
 }
 
 test MinHeap {
-    var heap = MinHeap(i32).init(std.testing.allocator);
+    var heap = MinHeap(usize).init(std.testing.allocator);
     defer heap.deinit();
+
+    try heap.insert(8);
+    try heap.insert(2);
+    try heap.insert(12);
+
+    // std.debug.print("{any}\n", .{heap});
+
+    _ = try heap.delete();
+    // std.debug.print("{d}\n{any}\n", .{ val.?, heap });
+
+    try std.testing.expectEqual(8, heap.data.items[0]);
+    try std.testing.expectEqual(12, heap.data.items[1]);
 
     try heap.insert(60);
     try check(heap);
