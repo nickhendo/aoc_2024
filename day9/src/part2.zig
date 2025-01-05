@@ -6,87 +6,103 @@ const assert = std.debug.assert;
 const print = std.debug.print;
 
 fn defragment(disk_array: *[]i16, puzzle_input: []const u8, heaps: *[10]heap.MinHeap(usize)) !void {
-    var index = puzzle_input.len;
+    var puzzle_input_index = puzzle_input.len;
 
-    var j: i16 = @intCast(puzzle_input.len / 2);
-    while (index > 0) {
-        index -= 1;
+    var file_id: i16 = @intCast(puzzle_input.len / 2);
 
-        if (@mod(index, 2) == 1) {
+    while (puzzle_input_index > 0) {
+        puzzle_input_index -= 1;
+
+        if (@mod(puzzle_input_index, 2) == 1) {
             continue;
         }
 
-        var remaining_space_size: usize = 0;
-        var remaining_space_index: usize = 0;
-
-        const block_size = getNextHeap(heaps, puzzle_input[index]);
+        const file_size = puzzle_input[puzzle_input_index];
+        const block_size = getNextHeap(heaps, file_size);
 
         if (block_size == null or block_size == 0) {
-            if (j > 0) {
-                j -= 1;
+            if (file_id > 0) {
+                std.debug.print("No space for file id: {d} of size: {d}\n", .{ file_id, file_size });
+                file_id -= 1;
             }
             continue;
         }
-        var value = &heaps[block_size.?];
+        var current_heap = &heaps[block_size.?];
 
-        const disk_buffer_index = getIndex(index, puzzle_input);
+        const disk_buffer_index = getIndex(puzzle_input_index, puzzle_input);
 
-        if (value.head().? > disk_buffer_index) {
+        if (current_heap.head().? > disk_buffer_index) {
+            file_id -= 1;
             continue;
         }
 
-        const block = try value.*.delete();
-
+        const block = try current_heap.*.delete();
         if (block == null) {
             unreachable;
         }
 
-        remaining_space_size = block_size.? - puzzle_input[index];
-        remaining_space_index = block.? + puzzle_input[index];
+        const remaining_space_size: usize = block_size.? - file_size;
+        const remaining_space_index: usize = block.? + file_size;
+
         try heaps[remaining_space_size].insert(remaining_space_index);
 
-        for (disk_array, 0..) |*ivalue, iii| {
-            if (iii < block.? or iii >= block.? + puzzle_input[index]) {
+        var updated = false;
+        var count: usize = 0;
+        for (disk_array.*, 0..) |*ivalue, iii| {
+            if (iii < block.? or iii >= block.? + file_size) {
                 continue;
             }
-            ivalue.* = j;
+            ivalue.* = file_id;
+            updated = true;
+            if (file_id == 5467) {
+                count += 1;
+            }
         }
+        if (!updated) {
+            unreachable;
+        }
+        assert(updated);
 
-        for (disk_array[disk_buffer_index .. disk_buffer_index + puzzle_input[index]]) |*val| {
+        for (disk_array.*[disk_buffer_index .. disk_buffer_index + file_size]) |*val| {
             val.* = -1;
         }
 
-        if (j > 0) {
-            j -= 1;
+        if (file_id > 0) {
+            file_id -= 1;
         }
     }
 }
 
 test defragment {
+    const allocator = std.testing.allocator;
+
     const TestCase = struct {
-        disk_array: []i16,
+        disk_array: []const i16,
         puzzle_input: []const u8,
-        size: usize,
         expected: []const i16,
     };
 
     const test_cases = [_]TestCase{
         .{
             .disk_array = &[_]i16{ 0, -1, -1, 1, 1, 1, -1, -1, -1, -1, 2, 2, 2, 2, 2 },
-            .puzzle_input = &[_]u8{ 1, 2, 3, 4, 5 },
-            .size = 15,
             .expected = &[_]i16{ 0, -1, -1, 1, 1, 1, -1, -1, -1, -1, 2, 2, 2, 2, 2 },
+            .puzzle_input = &[_]u8{ 1, 2, 3, 4, 5 },
         },
-        // .{
-        //     .input = &[_]u8{ 1, 0, 1, 0, 1 },
-        //     .size = 3,
-        //     .expected = &[_]i16{ 0, 1, 2 },
-        // },
-        // .{
-        //     .input = &[_]u8{ 2, 3, 3, 3, 1, 3, 3, 1, 2, 1, 4, 1, 4, 1, 3, 1, 4, 0, 2, 9, 1, 2, 3 },
-        //     .size = 57,
-        //     .expected = &[_]i16{ 0, 0, -1, -1, -1, 1, 1, 1, -1, -1, -1, 2, -1, -1, -1, 3, 3, 3, -1, 4, 4, -1, 5, 5, 5, 5, -1, 6, 6, 6, 6, -1, 7, 7, 7, -1, 8, 8, 8, 8, 9, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, 10, -1, -1, 11, 11, 11 },
-        // },
+        .{
+            .disk_array = &[_]i16{ 0, -1, -1, -1, -1, -1, 1, 1, 1, -1, -1, -1, -1, 2, 2, 2, 2, 2 },
+            .expected = &[_]i16{ 0, 2, 2, 2, 2, 2, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
+            .puzzle_input = &[_]u8{ 1, 5, 3, 4, 5 },
+        },
+        .{
+            .disk_array = &[_]i16{ 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, 7, -1, 8, -1, 9, -1, 10, -1, 11, -1, 12 },
+            .expected = &[_]i16{ 0, 12, 1, 11, 2, 10, 3, 9, 4, 8, 5, 7, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
+            .puzzle_input = &[_]u8{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }, // 0.1.2.3.4.5.6.7.8.9.10.11.12
+        },
+        .{
+            .disk_array = &[_]i16{ 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, 7, -1, 8, -1, 9, -1, 10, -1, 11, -1, 12 },
+            .expected = &[_]i16{ 0, 12, 1, 11, 2, 10, 3, 9, 4, 8, 5, 7, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
+            .puzzle_input = &[_]u8{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }, // 0.1.2.3.4.5.6.7.8.9.10.11.12
+        },
     };
 
     for (test_cases) |test_case| {
@@ -101,8 +117,15 @@ test defragment {
             }
         }
 
-        try defragment(&test_case.disk_array, test_case.puzzle_input, &heaps);
-        try std.testing.expectEqualSlices(i16, test_case.expected, test_case.disk_array);
+        try populateHeaps(test_case.puzzle_input, &heaps);
+
+        var defragmented_array = try allocator.alloc(i16, test_case.disk_array.len);
+        defer allocator.free(defragmented_array);
+
+        @memcpy(defragmented_array, test_case.disk_array);
+
+        try defragment(&defragmented_array, test_case.puzzle_input, &heaps);
+        try std.testing.expectEqualSlices(i16, test_case.expected, defragmented_array);
     }
 }
 
@@ -129,9 +152,96 @@ pub fn getResult(allocator: std.mem.Allocator, input: []const u8) !i64 {
     };
     defer allocator.free(disk.array);
 
-    try populateDiskData(&disk, input_buffer, &heaps);
+    try populateHeaps(input_buffer, &heaps);
+    try populateDiskData(&disk, input_buffer);
+
+    // std.debug.print("Disk array before:\n{any}\n", .{disk.array});
+
+    var counts_before = std.AutoHashMap(i16, usize).init(
+        allocator,
+    );
+    defer counts_before.deinit();
+
+    var counts_after = std.AutoHashMap(i16, usize).init(
+        allocator,
+    );
+    defer counts_after.deinit();
+
+    const before = try allocator.alloc(i16, disk.array.len);
+    defer allocator.free(before);
+
+    @memcpy(before, disk.array);
+
+    for (before) |val| {
+        if (counts_before.get(val) != null) {
+            counts_before.getEntry(val).?.value_ptr.* += 1;
+        } else {
+            try counts_before.put(val, 1);
+        }
+    }
 
     try defragment(&disk.array, input_buffer, &heaps);
+
+    for (disk.array) |val| {
+        if (counts_after.get(val) != null) {
+            counts_after.getEntry(val).?.value_ptr.* += 1;
+        } else {
+            try counts_after.put(val, 1);
+        }
+    }
+
+    // std.debug.print("Disk array after:\n{any}\n", .{disk.array});
+
+    for (before, 0..) |before_val, index| {
+        if (before_val != disk.array[index] and before_val != -1) {
+            print("Found values that do not match. Before: {d}, after: {d}, index: {d}\n", .{ before_val, disk.array[index], index });
+            break;
+        }
+    }
+
+    const cb = counts_before.get(-1);
+    if (cb == null) {
+        std.debug.print("-1 not found in before\n", .{});
+    }
+
+    const ca = counts_after.get(-1);
+    if (ca == null) {
+        std.debug.print("-1 not found in after\n", .{});
+    }
+
+    if (cb != null and ca != null and cb.? != ca.?) {
+        std.debug.print("{d} count for -1 in before, does not equal {d} count in after\n", .{ cb.?, ca.? });
+    }
+
+    std.debug.print("-1 Counts: Before: {d}, after: {d}\n", .{ cb.?, ca.? });
+
+    for (0..20) |val| {
+        const find_val: i16 = @intCast(val);
+        const before_count = counts_before.get(find_val);
+        if (before_count == null) {
+            std.debug.print("{d} not found in before\n", .{find_val});
+        }
+
+        const after_count = counts_after.get(find_val);
+        if (after_count == null) {
+            std.debug.print("{d} not found in after\n", .{find_val});
+        }
+
+        if (before_count != null and after_count != null and before_count.? != after_count.?) {
+            std.debug.print("{d} does not equal {d} for val={d}", .{ before_count.?, after_count.?, val });
+            if (before_count.? > after_count.?) {
+                std.debug.print(" -> Decreasing.\n", .{});
+            }
+
+            if (after_count.? > before_count.?) {
+                std.debug.print(" -> Increasing.\n", .{});
+            }
+
+            continue;
+        }
+    }
+
+    // std.debug.print("Before Counts:\n{any}\n", .{counts_before});
 
     return calculateChecksum(disk.array);
 }
@@ -194,11 +304,8 @@ test convertInputToArray {
     try std.testing.expectEqualSlices(u8, &expected, input_buffer);
 }
 
-fn populateDiskData(disk: *Disk, input: []const u8, heaps: *[10]heap.MinHeap(usize)) !void {
-    // Index of element on the disk, i.e. '0...111.2[2]2...3'.
+fn populateHeaps(input: []const u8, heaps: *[10]heap.MinHeap(usize)) !void {
     var disk_index: usize = 0;
-
-    var block_id: i16 = 0;
 
     for (input, 0..) |block_size, block_index| {
         // Odd block indexes indicate gaps in the disk, i.e. '...'
@@ -206,6 +313,65 @@ fn populateDiskData(disk: *Disk, input: []const u8, heaps: *[10]heap.MinHeap(usi
             try heaps[block_size].insert(disk_index);
         }
 
+        for (0..block_size) |_| {
+            disk_index += 1;
+        }
+    }
+}
+
+test populateHeaps {
+    const allocator = std.testing.allocator;
+
+    const TestCase = struct {
+        input: []const u8,
+        size: usize,
+        expected: [10]?usize,
+    };
+    const test_cases = [_]TestCase{
+        .{
+            .input = &[_]u8{ 1, 2, 3, 4, 5 }, // 0..111....22222
+            .size = 15,
+            .expected = [10]?usize{ null, null, 1, null, 6, null, null, null, null, null },
+        },
+        .{
+            .input = &[_]u8{ 4, 4, 4, 4, 4 }, // 0000....0000....0000
+            .size = 15,
+            .expected = [10]?usize{ null, null, null, null, 4, null, null, null, null, null },
+        },
+        .{
+            .input = &[_]u8{ 9, 9, 9, 9, 9, 9, 9 }, // 000000000.........1111111111...[etc]
+            .size = 15,
+            .expected = [10]?usize{ null, null, null, null, null, null, null, null, null, 9 },
+        },
+    };
+
+    for (test_cases) |test_case| {
+        var heaps: [10]heap.MinHeap(usize) = undefined;
+        for (&heaps) |*value| {
+            value.* = heap.MinHeap(usize).init(allocator);
+        }
+
+        defer {
+            for (&heaps) |*value| {
+                value.*.deinit();
+            }
+        }
+
+        try populateHeaps(test_case.input, &heaps);
+
+        for (test_case.expected, 0..) |expected_size, expected_index| {
+            try std.testing.expectEqual(expected_size, heaps[expected_index].head());
+        }
+    }
+}
+
+fn populateDiskData(disk: *Disk, input: []const u8) !void {
+    // Index of element on the disk, i.e. '0...111.2[2]2...3'.
+    var disk_index: usize = 0;
+
+    var block_id: i16 = 0;
+
+    for (input, 0..) |block_size, block_index| {
         // Create a series of elements aligning to the size of the current block.
         // If the block index is even, this a solid block, filled in with its ID,
         // otherwise it is a gap block, filled in with -1, corresponding to '.'.
@@ -257,18 +423,7 @@ test populateDiskData {
         };
         defer allocator.free(disk.array);
 
-        var heaps: [10]heap.MinHeap(usize) = undefined;
-        for (&heaps) |*value| {
-            value.* = heap.MinHeap(usize).init(std.testing.allocator);
-        }
-
-        defer {
-            for (&heaps) |*value| {
-                value.*.deinit();
-            }
-        }
-
-        try populateDiskData(&disk, test_case.input, &heaps);
+        try populateDiskData(&disk, test_case.input);
         try std.testing.expectEqualSlices(i16, test_case.expected, disk.array);
     }
 }
@@ -435,3 +590,6 @@ fn printLn(comptime fmt: []const u8, args: anytype) void {
 // 0099.1117772...333.44.5555.6666.....8888..
 // 0099.111777244.333....5555.6666.....8888..
 // 00992111777.44.333....5555.6666.....8888..
+
+// 6389911791746 <- Correct answer
+// 6394601446686 <- Prev cursed incorrect answer
